@@ -1,0 +1,105 @@
+
+ .app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 1.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.app-header h1 {
+  font-size: 2.5rem;
+  color: #667eea;
+  margin-bottom: 0.5rem;
+}
+
+.app-header p {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.mode-selector {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.mode-selector button {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  border: 2px solid #667eea;
+  background: white;
+  color: #667eea;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+}
+
+.mode-selector button:hover {
+  background: #f0f0ff;
+}
+
+.mode-selector button.active {
+  background: #667eea;
+  color: white;
+}
+
+.app-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 1800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.translate-mode {
+  display: grid;
+  grid-template-rows: 2fr 1fr;
+  gap: 1.5rem;
+}
+
+.camera-section,
+.output-section,
+.side-panel > div {
+  background: white;
+  border-radius: 15px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1200px) {
+  .app-main {
+    grid-template-columns: 1fr;
+  }
+
+  .side-panel {
+    flex-direction: row;
+  }
+}
+
+@media (max-width: 768px) {
+  .translate-mode {
+    grid-template-rows: auto;
+  }
+
+  .side-panel {
+    flex-direction: column;
+  }
+}

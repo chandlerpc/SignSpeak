@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+.eggs/
+
+# ML & Data
+ml/data/
+ml/checkpoints/
+ml/models/
+*.h5
+*.tflite
+*.pb
+training_metrics.json
+training_history.png
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Environment
+.env
+.env.local
+
+# Kaggle
+.kaggle/
+kaggle.json
+
+# Public models (too large for git)
+public/models/
