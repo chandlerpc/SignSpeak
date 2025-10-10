@@ -185,15 +185,15 @@ const CameraView = ({ onLetterRecognized }) => {
         offsetX, offsetY, cropWidth, cropHeight
       );
 
-      // Resize to 128x128 for the model
+      // Resize to 160x160 for the model
       const resizedCanvas = document.createElement('canvas');
-      resizedCanvas.width = 128;
-      resizedCanvas.height = 128;
+      resizedCanvas.width = 160;
+      resizedCanvas.height = 160;
       const resizedCtx = resizedCanvas.getContext('2d');
-      resizedCtx.drawImage(tempCanvas, 0, 0, 128, 128);
+      resizedCtx.drawImage(tempCanvas, 0, 0, 160, 160);
 
       // Convert canvas to image data array [0-1 normalized]
-      const imageData = resizedCtx.getImageData(0, 0, 128, 128);
+      const imageData = resizedCtx.getImageData(0, 0, 160, 160);
       const pixels = imageData.data;
       const normalized = [];
 
@@ -204,12 +204,12 @@ const CameraView = ({ onLetterRecognized }) => {
         normalized.push(pixels[i + 2] / 255.0); // B
       }
 
-      // Reshape to [128, 128, 3]
+      // Reshape to [160, 160, 3]
       const imageArray = [];
-      for (let y = 0; y < 128; y++) {
+      for (let y = 0; y < 160; y++) {
         const row = [];
-        for (let x = 0; x < 128; x++) {
-          const idx = (y * 128 + x) * 3;
+        for (let x = 0; x < 160; x++) {
+          const idx = (y * 160 + x) * 3;
           row.push([normalized[idx], normalized[idx + 1], normalized[idx + 2]]);
         }
         imageArray.push(row);

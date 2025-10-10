@@ -16,7 +16,7 @@ CORS(app)
 print("Loading sequential inference model...")
 model = keras.models.load_model('./checkpoints/sequential_inference.h5')
 print(f"Model loaded! Input: {model.input_shape}, Output: {model.output_shape}")
-print("Model: Sequential inference model (128x128 input, 26 classes)")
+print("Model: Sequential inference model (160x160 input, 26 classes)")
 
 # Load class labels
 with open('../public/models/asl_model/class_labels.json', 'r') as f:
@@ -31,12 +31,12 @@ def predict():
         data = request.get_json()
         image_data = np.array(data['image'], dtype=np.float32)
 
-        # Ensure shape is (1, 128, 128, 3) for sequential model
+        # Ensure shape is (1, 160, 160, 3) for sequential model
         if len(image_data.shape) == 3:
             image_data = np.expand_dims(image_data, axis=0)
 
         # Verify correct input shape
-        expected_shape = (1, 128, 128, 3)
+        expected_shape = (1, 160, 160, 3)
         if image_data.shape != expected_shape:
             return jsonify({'error': f'Invalid input shape. Expected {expected_shape}, got {image_data.shape}'}), 400
 

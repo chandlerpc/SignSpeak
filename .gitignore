@@ -28,6 +28,11 @@ ml/models/
 training_metrics.json
 training_history.png
 
+# Large training data files (store externally)
+ml/corrected_training_data.json
+ml/merged_training_data_deduplicated.json
+ml/training_data_deduplicated_500.json
+
 # IDE
 .idea/
 .vscode/
