@@ -1,4 +1,4 @@
-"""Train ASL model from JSON data collected via DataCollector component"""
+"""Simple training - match DataCollector preprocessing exactly"""
 import os
 import sys
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -12,14 +12,15 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.applications import MobileNetV2
 from sklearn.model_selection import train_test_split
+import tensorflow as tf
 
 # Configuration
-IMG_SIZE = 160
+IMG_SIZE = 128
 BATCH_SIZE = 32
-EPOCHS = 100  # Reduced from 500 to prevent overfitting
+EPOCHS = 50
 
 def decode_base64_image(base64_str):
-    """Decode base64 string to numpy array"""
+    """Decode base64 - EXACTLY like DataCollector (NO crop)"""
     # Remove data URL prefix if present
     if 'data:image' in base64_str:
         base64_str = base64_str.split(',')[1]
@@ -27,7 +28,9 @@ def decode_base64_image(base64_str):
     # Decode base64 to image
     img_data = base64.b64decode(base64_str)
     img = Image.open(io.BytesIO(img_data))
-    img = img.convert('RGB')  # Ensure RGB format
+    img = img.convert('RGB')
+
+    # DataCollector saves as 160x160 - resize to 128x128 (NO CROP!)
     img = img.resize((IMG_SIZE, IMG_SIZE))
 
     # Convert to numpy array and normalize
@@ -43,7 +46,7 @@ def load_json_data(json_path):
 
     images = []
     labels = []
-    class_names = sorted(data.keys())  # Alphabetical order
+    class_names = sorted(data.keys())
 
     print(f"Found {len(class_names)} classes: {class_names}")
 
@@ -61,14 +64,16 @@ def load_json_data(json_path):
     labels = np.array(labels)
 
     print(f"Loaded {len(images)} images total")
+    print(f"Image shape: {images.shape}")
     return images, labels, class_names
 
 def create_model(num_classes):
-    """Create MobileNetV2-based model"""
+    """Create simple MobileNetV2 model"""
     base_model = MobileNetV2(
         input_shape=(IMG_SIZE, IMG_SIZE, 3),
         include_top=False,
-        weights='imagenet'
+        weights='imagenet',
+        alpha=1.0
     )
     base_model.trainable = False
 
@@ -85,8 +90,7 @@ def create_model(num_classes):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python retrain_from_json.py <path_to_json_file>")
-        print("Example: python retrain_from_json.py ../training_data/asl_training_data_1234567890.json")
+        print("Usage: python retrain_simple.py <path_to_json_file>")
         sys.exit(1)
 
     json_path = sys.argv[1]
@@ -103,7 +107,7 @@ def main():
         images, labels, test_size=0.2, random_state=42, stratify=labels
     )
 
-    print(f"Train set: {len(X_train)} images")
+    print(f"\nTrain set: {len(X_train)} images")
     print(f"Validation set: {len(X_val)} images")
 
     # Create model
@@ -120,10 +124,10 @@ def main():
     # Create checkpoint directory
     os.makedirs('./checkpoints', exist_ok=True)
 
-    # Callbacks
+    # Callbacks - monitor VALIDATION accuracy
     callbacks = [
         keras.callbacks.ModelCheckpoint(
-            './checkpoints/mobilenet_best.keras',
+            './checkpoints/simple_best.keras',
             save_best_only=True,
             monitor='val_accuracy',
             mode='max',
@@ -131,7 +135,7 @@ def main():
         ),
         keras.callbacks.EarlyStopping(
             monitor='val_accuracy',
-            patience=20,  # Stop if no improvement for 20 epochs
+            patience=10,
             restore_best_weights=True,
             verbose=1
         ),
@@ -142,28 +146,30 @@ def main():
             min_lr=0.00001,
             verbose=1
         ),
-        keras.callbacks.CSVLogger('./training_history.csv')
+        keras.callbacks.CSVLogger('./training_simple_history.csv')
     ]
 
     # Data augmentation
     data_augmentation = keras.Sequential([
         layers.RandomFlip("horizontal"),
-        layers.RandomRotation(0.1),
-        layers.RandomZoom(0.1),
-        layers.RandomBrightness(0.1),
+        layers.RandomRotation(0.2),
+        layers.RandomZoom(0.2),
+        layers.RandomTranslation(0.1, 0.1),
+        layers.RandomBrightness(0.2),
+        layers.RandomContrast(0.2),
     ])
-
-    # Augment training data
-    print("\nApplying data augmentation...")
-    X_train_aug = data_augmentation(X_train, training=True)
 
     # Train model
     print("\n" + "="*50)
-    print("Starting training...")
+    print("Training with SIMPLE preprocessing (NO crop)")
+    print("- Direct resize 160x160 to 128x128")
+    print("- Moderate augmentation")
+    print("- Monitoring VALIDATION accuracy")
     print("="*50 + "\n")
 
     history = model.fit(
-        X_train_aug, y_train,
+        data_augmentation(X_train, training=True),
+        y_train,
         validation_data=(X_val, y_val),
         epochs=EPOCHS,
         batch_size=BATCH_SIZE,
@@ -171,9 +177,9 @@ def main():
         verbose=1
     )
 
-    # Fine-tune (unfreeze base model)
+    # Fine-tune with unfrozen base
     print("\n" + "="*50)
-    print("Fine-tuning with unfrozen base model...")
+    print("Fine-tuning...")
     print("="*50 + "\n")
 
     base_model = model.layers[0]
@@ -186,21 +192,30 @@ def main():
     )
 
     history_fine = model.fit(
-        X_train_aug, y_train,
+        data_augmentation(X_train, training=True),
+        y_train,
         validation_data=(X_val, y_val),
-        epochs=10,
+        epochs=20,
         batch_size=BATCH_SIZE,
         callbacks=callbacks,
         verbose=1
     )
 
     # Final evaluation
+    train_loss, train_acc = model.evaluate(X_train, y_train, verbose=0)
     val_loss, val_acc = model.evaluate(X_val, y_val, verbose=0)
-    print(f"\nFinal Validation Accuracy: {val_acc*100:.2f}%")
+
+    print(f"\n{'='*50}")
+    print(f"FINAL RESULTS:")
+    print(f"{'='*50}")
+    print(f"Training Accuracy:   {train_acc*100:.2f}%")
+    print(f"Validation Accuracy: {val_acc*100:.2f}%")
+    print(f"Accuracy Gap:        {abs(train_acc - val_acc)*100:.2f}%")
+    print(f"{'='*50}")
 
     # Save final model
-    model.save('./checkpoints/mobilenet_final.keras')
-    print(f"\nModel saved to ./checkpoints/mobilenet_final.keras")
+    model.save('./checkpoints/simple_final.keras')
+    print(f"\nModel saved to ./checkpoints/simple_final.keras")
 
     # Save class labels
     labels_data = {
@@ -212,14 +227,7 @@ def main():
         json.dump(labels_data, f, indent=2)
 
     print(f"Class labels saved to ../public/models/asl_model/class_labels.json")
-
-    print("\n" + "="*50)
-    print("TRAINING COMPLETE!")
-    print("="*50)
-    print(f"Best model: ./checkpoints/mobilenet_best.keras")
-    print(f"Final model: ./checkpoints/mobilenet_final.keras")
-    print(f"Final validation accuracy: {val_acc*100:.2f}%")
-    print("\nModel is ready to use! Restart the model server to load the new model.")
+    print("\nRestart the model server to load the new model!")
 
 if __name__ == '__main__':
     main()

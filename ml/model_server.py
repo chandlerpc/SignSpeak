@@ -13,10 +13,10 @@ app = Flask(__name__)
 CORS(app)
 
 # Load model at startup
-print("Loading sequential inference model...")
-model = keras.models.load_model('./checkpoints/sequential_inference.h5')
+print("Loading simple model (simple_final.keras)...")
+model = keras.models.load_model('./checkpoints/simple_final.keras')
 print(f"Model loaded! Input: {model.input_shape}, Output: {model.output_shape}")
-print("Model: Sequential inference model (160x160 input, 26 classes)")
+print("Model: Simple MobileNetV2 (128x128 input, no crop, direct resize)")
 
 # Load class labels
 with open('../public/models/asl_model/class_labels.json', 'r') as f:
@@ -31,14 +31,18 @@ def predict():
         data = request.get_json()
         image_data = np.array(data['image'], dtype=np.float32)
 
-        # Ensure shape is (1, 160, 160, 3) for sequential model
+        # Ensure shape is (1, 128, 128, 3) for hand-focused model
         if len(image_data.shape) == 3:
             image_data = np.expand_dims(image_data, axis=0)
 
         # Verify correct input shape
-        expected_shape = (1, 160, 160, 3)
+        expected_shape = (1, 128, 128, 3)
         if image_data.shape != expected_shape:
             return jsonify({'error': f'Invalid input shape. Expected {expected_shape}, got {image_data.shape}'}), 400
+
+        # SIMPLE preprocessing - just like training: already normalized to [0,1]
+        # No extra brightness normalization - keep it simple!
+        print(f"Image stats - Min: {image_data.min():.4f}, Max: {image_data.max():.4f}, Mean: {image_data.mean():.4f}")
 
         # Make prediction
         predictions = model.predict(image_data, verbose=0)

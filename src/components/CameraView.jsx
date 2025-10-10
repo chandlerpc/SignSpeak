@@ -80,8 +80,8 @@ const CameraView = ({ onLetterRecognized }) => {
       // Draw hand landmarks
       drawHandLandmarks(ctx, landmarks, canvas.width, canvas.height);
 
-      // Get prediction from Flask API
-      await classifyHand(results.image, landmarks, canvas.width, canvas.height);
+      // Get prediction from Flask API (pass canvas for extraction)
+      await classifyHand(canvas, landmarks, canvas.width, canvas.height);
     } else {
       setIsDetecting(false);
     }
@@ -117,7 +117,7 @@ const CameraView = ({ onLetterRecognized }) => {
     });
   };
 
-  const classifyHand = async (image, landmarks, width, height) => {
+  const classifyHand = async (canvas, landmarks, width, height) => {
     try {
       // Throttle predictions to once every 2 seconds
       const now = Date.now();
@@ -125,75 +125,56 @@ const CameraView = ({ onLetterRecognized }) => {
         return; // Skip this prediction
       }
 
-      console.log('🖐️ Hand detected, sending to model server...');
+      // Update throttle time IMMEDIATELY to prevent spam
+      lastPredictionTime.current = now;
+
+      console.log('Hand detected, sending to model server...');
 
       // Extract bounding box around hand with generous padding
       const xs = landmarks.map((l) => l.x * width);
       const ys = landmarks.map((l) => l.y * height);
 
-      // Calculate hand size and use percentage-based padding
-      const handWidth = Math.max(...xs) - Math.min(...xs);
-      const handHeight = Math.max(...ys) - Math.min(...ys);
-      const handSize = Math.max(handWidth, handHeight);
-
-      // Use 60% padding (training images show hand taking ~70% of frame)
-      const padding = handSize * 0.6;
+      // Use EXACTLY the same padding as training data (30px fixed)
+      // This matches DataCollector.jsx lines 149-152
+      const padding = 30;
 
       let minX = Math.min(...xs) - padding;
       let minY = Math.min(...ys) - padding;
       let maxX = Math.max(...xs) + padding;
       let maxY = Math.max(...ys) + padding;
 
-      // Make it square (training images are square)
-      const boxWidth = maxX - minX;
-      const boxHeight = maxY - minY;
-      const size = Math.max(boxWidth, boxHeight);
+      // DON'T make it square - training data is NOT square, it's the natural bounding box
+      // DataCollector just crops the ROI and resizes to 160x160
 
-      // Center the hand in the square
-      const centerX = (minX + maxX) / 2;
-      const centerY = (minY + maxY) / 2;
-      minX = centerX - size / 2;
-      minY = centerY - size / 2;
-      maxX = centerX + size / 2;
-      maxY = centerY + size / 2;
-
-      // Clamp to image bounds
+      // Clamp to image bounds (same as DataCollector)
       minX = Math.max(0, minX);
       minY = Math.max(0, minY);
       maxX = Math.min(width, maxX);
       maxY = Math.min(height, maxY);
 
-      // Create square canvas for hand region
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = size;
-      tempCanvas.height = size;
-      const tempCtx = tempCanvas.getContext('2d');
-
-      // Fill with light background (training images have light backgrounds)
-      tempCtx.fillStyle = '#E0E0E0';
-      tempCtx.fillRect(0, 0, size, size);
-
-      // Draw hand region centered
       const cropWidth = maxX - minX;
       const cropHeight = maxY - minY;
-      const offsetX = (size - cropWidth) / 2;
-      const offsetY = (size - cropHeight) / 2;
 
-      tempCtx.drawImage(
-        image,
-        minX, minY, cropWidth, cropHeight,
-        offsetX, offsetY, cropWidth, cropHeight
-      );
+      // Extract ROI from canvas (EXACTLY like DataCollector - includes MediaPipe overlay!)
+      const ctx = canvas.getContext('2d');
+      const roi = ctx.getImageData(minX, minY, cropWidth, cropHeight);
 
-      // Resize to 160x160 for the model
-      const resizedCanvas = document.createElement('canvas');
-      resizedCanvas.width = 160;
-      resizedCanvas.height = 160;
-      const resizedCtx = resizedCanvas.getContext('2d');
-      resizedCtx.drawImage(tempCanvas, 0, 0, 160, 160);
+      // Create temporary canvas with ROI (same as DataCollector)
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = cropWidth;
+      tempCanvas.height = cropHeight;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.putImageData(roi, 0, 0);
+
+      // SIMPLE: Resize directly to 128x128 (NO CROP - matches DataCollector & retrain_simple.py)
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = 128;
+      finalCanvas.height = 128;
+      const finalCtx = finalCanvas.getContext('2d');
+      finalCtx.drawImage(tempCanvas, 0, 0, 128, 128);
 
       // Convert canvas to image data array [0-1 normalized]
-      const imageData = resizedCtx.getImageData(0, 0, 160, 160);
+      const imageData = finalCtx.getImageData(0, 0, 128, 128);
       const pixels = imageData.data;
       const normalized = [];
 
@@ -204,12 +185,12 @@ const CameraView = ({ onLetterRecognized }) => {
         normalized.push(pixels[i + 2] / 255.0); // B
       }
 
-      // Reshape to [160, 160, 3]
+      // Reshape to [128, 128, 3]
       const imageArray = [];
-      for (let y = 0; y < 160; y++) {
+      for (let y = 0; y < 128; y++) {
         const row = [];
-        for (let x = 0; x < 160; x++) {
-          const idx = (y * 160 + x) * 3;
+        for (let x = 0; x < 128; x++) {
+          const idx = (y * 128 + x) * 3;
           row.push([normalized[idx], normalized[idx + 1], normalized[idx + 2]]);
         }
         imageArray.push(row);
@@ -236,10 +217,8 @@ const CameraView = ({ onLetterRecognized }) => {
 
       console.log(`Prediction: ${predictedLetter} (confidence: ${(confidence * 100).toFixed(2)}%)`);
 
-      if (confidence > 0.5) {
-        lastPredictionTime.current = Date.now();
-        onLetterRecognized(predictedLetter, confidence);
-      }
+      // Always call callback, let parent decide what to do with it
+      onLetterRecognized(predictedLetter, confidence);
     } catch (error) {
       console.error('Classification error:', error);
     }
